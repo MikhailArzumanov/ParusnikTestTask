@@ -45,7 +45,7 @@ namespace Backend {
             AppConfigurator.Configure(
                 app                                 , 
                 configuration   : app.Configuration , 
-                isDevelopmentEnv
+                isDevelopmentEnv: true
             );
 
             var appUrl = GetAppUrl(app.Configuration);
