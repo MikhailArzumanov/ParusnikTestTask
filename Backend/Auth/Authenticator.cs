@@ -1,4 +1,5 @@
-﻿using Backend.Cryptography;
+﻿using Backend.Constants;
+using Backend.Cryptography;
 using Backend.Data;
 using Backend.Models;
 using Microsoft.Extensions.Primitives;
@@ -97,6 +98,9 @@ namespace Backend.Authentication {
             byte[] tokenBytes = AesProvider.Decrypt(encryptedTokenBytes, aesKey);
             string tokenJson = Encoding.UTF8.GetString(tokenBytes);
             var token = Token.FromJson(tokenJson);
+            if(token == null) {
+                throw new FormatException(ErrMsgs.TOKEN_IS_NOT_VALID);
+            }
             return token;
         }
         /** Функция Authenticate(string)

@@ -58,7 +58,7 @@ namespace Backend.Models {
          *  См. <see cref="Token"/>
          * </summary>
          */
-        public static Token FromJson(string json) {
+        public static Token? FromJson(string json) {
             var token = JsonTokenSerializer.FromJson(json);
             return token;
         }

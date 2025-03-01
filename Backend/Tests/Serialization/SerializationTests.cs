@@ -56,7 +56,7 @@ namespace Backend.Tests.Serialization {
         private void Test(Token subject) {
             var jsonStr = JsonTokenSerializer.ToJson(subject);
             var rebuilded = JsonTokenSerializer.FromJson(jsonStr);
-            if(!AreEqual(subject, rebuilded)) {
+            if(rebuilded == null || !AreEqual(subject, rebuilded)) {
                 ThrowException();
             }
         }

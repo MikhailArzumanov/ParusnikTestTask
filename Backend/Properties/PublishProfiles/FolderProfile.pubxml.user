@@ -5,7 +5,7 @@ https://go.microsoft.com/fwlink/?LinkID=208121.
 <Project>
   <PropertyGroup>
     <_PublishTargetUrl>D:\Workflow\ООО 'Парусник'\ParusnikTestTask\Backend\bin\Release\net8.0\publish\</_PublishTargetUrl>
-    <History>True|2025-02-28T06:02:01.6661094Z||;</History>
+    <History>True|2025-02-28T06:32:53.3148127Z||;True|2025-02-28T09:02:01.6661094+03:00||;</History>
     <LastFailureDetails />
   </PropertyGroup>
 </Project>
