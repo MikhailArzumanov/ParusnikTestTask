@@ -2,6 +2,7 @@
 using Backend.Constants;
 using Backend.Data;
 using Backend.Models;
+using Backend.Models.Interfaces;
 using Backend.Validation;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -93,15 +94,15 @@ namespace Backend.Controllers {
          * </returns>
          */
         private IActionResult? ExecEntryPipeline(
-            HttpRequest request       ,
-            UserRights  requiredRights,
-            TasksStatus entry
+            HttpRequest    request        ,
+            UserRights     requiredRights ,
+            IHasStatusData data
         ) {
             var authErrorResp = TryAuth(Request, UserRights.USER);
             if (authErrorResp != null) {
                 return authErrorResp;
             }
-            var validationMsg = Validator.Validate(entry);
+            var validationMsg = Validator.Validate(data);
             if (validationMsg != String.Empty) {
                 return BadRequest(validationMsg);
             }
@@ -128,7 +129,8 @@ namespace Backend.Controllers {
                 return NotFound(RespMsgs.TaskStatuses.ID_NOT_FOUND);
             }
 
-            return Ok(entry);
+            var response = new StatusResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция GetList
@@ -145,8 +147,9 @@ namespace Backend.Controllers {
                 return authErrorResponse;
             }
 
-            var entries = db.TaskStatuses;
+            var entries = db.TaskStatuses.ToList();
 
+            var respons = new StatusesResponse(entries);
             return Ok(entries);
         }
         #endregion
@@ -159,19 +162,25 @@ namespace Backend.Controllers {
          * <returns>Возращает объект http-ответа</returns>
          */
         [HttpPost(Routes.Statuses.CREATE_ENTRY)]
-        public IActionResult CreateEntry([FromBody] TasksStatus data) {
+        public IActionResult CreateEntry([FromBody] StatusRequest data) {
             var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
             if(errorResponse != null) {
                 return errorResponse;
             }
 
             var timestamp = DateTime.UtcNow;
-            data.CreationDate         = timestamp;
-            data.LastModificationDate = timestamp;
+            var entry = new TasksStatus {
+                Title                = data.Title       ,
+                Description          = data.Description ,
+                CreationDate         = timestamp        ,
+                LastModificationDate = timestamp        ,
+            };
 
-            db.TaskStatuses.Add(data);
+            db.TaskStatuses.Add(entry);
             db.SaveChanges();
-            return Ok(data);
+
+            var response = new StatusResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RedactEntry
@@ -184,7 +193,10 @@ namespace Backend.Controllers {
          * <returns>Возращает объект http-ответа</returns>
          */
         [HttpPut(Routes.Statuses.REDACT_ENTRY)]
-        public IActionResult RedactEntry([FromBody] TasksStatus data, [FromRoute] int statusId) {
+        public IActionResult RedactEntry(
+            [FromBody ] StatusRequest data    ,
+            [FromRoute] int           statusId
+        ) {
             var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
             if(errorResponse != null) {
                 return errorResponse;
@@ -195,13 +207,15 @@ namespace Backend.Controllers {
                 return NotFound(RespMsgs.TaskStatuses.ID_NOT_FOUND);
             }
 
-            entry.LastModificationDate = DateTime.UtcNow;
             entry.Title       = data.Title       ;
             entry.Description = data.Description ;
+            entry.LastModificationDate = DateTime.UtcNow;
 
             db.TaskStatuses.Update(entry);
             db.SaveChanges();
-            return Ok(entry);
+
+            var response = new StatusResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region  Функция RemoveEntry
@@ -226,7 +240,55 @@ namespace Backend.Controllers {
 
             db.TaskStatuses.Remove(entry);
             db.SaveChanges();
+
+            var response = new StatusResponse(entry);
             return Ok(entry);
+        }
+        #endregion
+        #region Структуры запросов
+        /** Класс StatusRequest
+         * <summary>
+         *  Класс представляет структуру запроса с передачей данных статуса.
+         *  Описание полей см. в <see cref="TasksStatus"/>
+         * </summary>
+         */
+        public class StatusRequest : IHasStatusData {
+            public string Title       { get; set; } = String.Empty;
+            public string Description { get; set; } = String.Empty;
+        }
+        #endregion
+        #region Структуры ответов
+        /** Класс StatusResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом записи статуса.
+         *  Описание полей см. в <see cref="TasksStatus"/>
+         * </summary>
+         */
+        public class StatusResponse {
+            public int    Id          { get; set; }
+            public string Title       { get; set; } = String.Empty;
+            public string Description { get; set; } = String.Empty;
+            public StatusResponse(TasksStatus entry) {
+                Id          = entry.Id          ;
+                Title       = entry.Title       ;
+                Description = entry.Description ;
+            }
+        }
+        /** Класс StatusResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом набора записей.
+         * </summary>
+         */
+        public class StatusesResponse {
+            /** Поле entries
+             * <summary>
+             *  Представляет набор из записей результата запроса.
+             * </summary>
+             */
+            public ICollection<StatusResponse> Entries { get; set; }
+            public StatusesResponse(ICollection<TasksStatus> entries) {
+                this.Entries = entries.Select(x => new StatusResponse(x)).ToList();
+            }
         }
         #endregion
     }

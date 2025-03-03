@@ -4,10 +4,12 @@ using Backend.Constants;
 using Backend.Cryptography;
 using Backend.Data;
 using Backend.Models;
+using Backend.Models.Interfaces;
 using Backend.Validation;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace Backend.Controllers {
     #region Контроллер UsersController
@@ -96,9 +98,9 @@ namespace Backend.Controllers {
          * </returns>
          */
         private IActionResult? ExecEntryPipeline(
-            HttpRequest request        ,
-            UserRights  requiredRights ,
-            User        entry
+            HttpRequest  request        ,
+            UserRights   requiredRights ,
+            IHasUserData entry
         ) {
             var authErrorResp = TryAuth(Request, UserRights.USER);
             if(authErrorResp != null) {
@@ -142,20 +144,29 @@ namespace Backend.Controllers {
          * <returns>Возращает объект http-ответа</returns>
          */
         [HttpPost(Routes.Users.CREATE_ENTRY)]
-        public IActionResult CreateEntry([FromBody] User data) {
+        public IActionResult CreateEntry([FromBody] UserRequest data) {
             var errorResp = ExecEntryPipeline(Request, UserRights.USER, data);
             if (errorResp != null) {
                 return errorResp;
             }
 
             var timestamp = DateTime.UtcNow;
-            data.Rights   = UserRights.USER           ;
-            data.Password = Hasher.Hash(data.Password);
-            data.CreationDate         = timestamp;
-            data.LastModificationDate = timestamp;
-            db.Users.Add(data);
+            var entry = new User {
+                Name    = data.Name       ,
+                Surname = data.Surname    ,
+                Email   = data.Email      ,
+                Rights  = UserRights.USER ,
+                Login    = data.Login,
+                Password = Hasher.Hash(data.Password),
+                CreationDate         = timestamp,
+                LastModificationDate = timestamp,  
+            };
+
+            db.Users.Add(entry);
             db.SaveChanges();
-            return Ok(data);
+
+            var response = new UserResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RedactEntry
@@ -168,7 +179,10 @@ namespace Backend.Controllers {
          * <returns>Возращает объект http-ответа</returns>
          */
         [HttpPut(Routes.Users.REDACT_ENTRY)]
-        public IActionResult RedactEntry([FromBody] User data, [FromRoute] int userId) {
+        public IActionResult RedactEntry(
+            [FromBody ] UserRequest data, 
+            [FromRoute] int userId
+        ) {
             var errorResp = ExecEntryPipeline(Request, UserRights.USER, data);
             if (errorResp != null) {
                 return errorResp;
@@ -180,16 +194,18 @@ namespace Backend.Controllers {
             }
 
             entry.LastModificationDate = DateTime.UtcNow;
-            entry.Email   = data.Email   ;
-            entry.Surname = data.Surname ;
-            entry.Name    = data.Name    ;
-            entry.Login    =             data.Login    ;
+            entry.Email    = data.Email   ;
+            entry.Surname  = data.Surname ;
+            entry.Name     = data.Name    ;
+            entry.Login    = data.Login   ;
             entry.Password = Hasher.Hash(data.Password);
             entry.Rights = data.Rights ;
 
             db.Users.Update(entry);
             db.SaveChanges();
-            return Ok(entry);
+
+            var response = new UserResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RemoveEntry
@@ -214,7 +230,9 @@ namespace Backend.Controllers {
 
             db.Users.Remove(entry);
             db.SaveChanges();
-            return Ok(entry);
+
+            var response = new UserResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция GetConcrete
@@ -237,7 +255,8 @@ namespace Backend.Controllers {
                 return NotFound(RespMsgs.Users.ID_NOT_FOUND);
             }
 
-            return Ok(entry);
+            var response = new UserResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция GetList
@@ -275,10 +294,8 @@ namespace Backend.Controllers {
                 sortedEntries = entries.OrderByDescending(x => x.Name);
             }
 
-            var paginated = Page<User>.FormPage(
-                sortedEntries.ToList(), pageNumber, pageSize
-            );
-            return Ok(paginated);
+            var response = new UsersResponse(sortedEntries, pageNumber, pageSize);
+            return Ok(response);
         }
         #endregion
         #region Функция GetParticipantsList
@@ -327,17 +344,92 @@ namespace Backend.Controllers {
                 sortedEntries = entries.OrderByDescending(x => x.Name);
             }
 
-            var paginated = Page<User>.FormPage(
-                sortedEntries.ToList(), pageNumber, pageSize
-            );
-            foreach(var entry in paginated.Items) {
-                entry.ParticipatingProjects = new List<Project>();
+            var response = new UsersResponse(sortedEntries.ToList(), pageNumber, pageSize);
+            return Ok(response);
+        }
+        #endregion
+        #region Структуры запросов
+        /** Класс UserRequest
+         * <summary>
+         *  Класс представляет структуру запроса с передачей данных пользователя.
+         *  Описание полей см. в <see cref="User"/>
+         * </summary>
+         */
+        public class UserRequest : IHasUserData {
+            public string     Login    { get; set; } = String.Empty;
+            public string     Password { get; set; } = String.Empty;
+            public string     Name     { get; set; } = String.Empty;
+            public string     Surname  { get; set; } = String.Empty;
+            public string     Email    { get; set; } = String.Empty;
+            public UserRights Rights   { get; set; } = UserRights.NONVALID;
+        }
+        #endregion
+        #region Структуры ответов
+        /** Класс UserResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом записи пользователя.
+         *  Описание полей см. в <see cref="User"/>
+         * </summary>
+         */
+        public class UserResponse {
+            public int    Id       { get; set; }
+            public string Login    { get; set; } = String.Empty;
+            public string Password { get; set; } = String.Empty;
+            public string Name     { get; set; } = String.Empty;
+            public string Surname  { get; set; } = String.Empty;
+            public string Email    { get; set; } = String.Empty;
+            public UserResponse(User entry) {
+                Id       = entry.Id       ;
+                Login    = entry.Login    ;
+                Password = entry.Password ;
+                Name     = entry.Name     ;
+                Surname  = entry.Surname  ;
+                Email    = entry.Email    ;
             }
-            return Ok(paginated);
+        }
+        /** Класс UsersResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом набора записей.<br/>
+         *  <br/>
+         *  Конструкторы класса предоставляют функционал пагинации.
+         * </summary>
+         */
+        public class UsersResponse {
+            public int PageNumber { get; set; }
+            public int PageSize   { get; set; }
+            public int PagesCount { get; set; }
+            public ICollection<UserResponse> Entries { get; set; }
+            public UsersResponse(IQueryable<User> entries) {
+                PageNumber = 1; PageSize = -1; PagesCount = 1;
+                this.Entries = entries.Select(x => new UserResponse(x)).ToList();
+            }
+            public UsersResponse(ICollection<User> entries) {
+                PageNumber = 1; PageSize = -1; PagesCount = 1;
+                this.Entries = entries.Select(x => new UserResponse(x)).ToList();
+            }
+            public UsersResponse(IQueryable<User> entries, int pageNumber, int pageSize) {
+                PageNumber = pageNumber; PageSize = pageSize;
+                PagesCount = (int) Math.Ceiling(entries.Count()/1.0/PageSize);
+
+                var skipCount = PageSize*(PageNumber - 1);
+                this.Entries = entries
+                    .OrderBy(x => x.Id).Skip(skipCount).Take(PageSize)
+                    .Select(x => new UserResponse(x)).ToList();
+            }
+            public UsersResponse(ICollection<User> entries, int pageNumber, int pageSize) {
+                PageNumber = pageNumber; PageSize = pageSize;
+                PagesCount = (int) Math.Ceiling(entries.Count/1.0/PageSize);
+
+                var skipCount = PageSize*(PageNumber - 1);
+                this.Entries = entries
+                    .OrderBy(x => x.Id).Skip(skipCount).Take(PageSize)
+                    .Select(x => new UserResponse(x)).ToList();
+            }
         }
         #endregion
     }
     #endregion
+
     #region Класс AuthData 
     /** Класс AuthData 
      * <summary>

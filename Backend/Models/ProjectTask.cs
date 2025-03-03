@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using Backend.Models.Interfaces;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Backend.Models {
     #region Класс ProjectTask
@@ -18,7 +19,7 @@ namespace Backend.Models {
      *  Коллекция комментариев <see cref="Commentaries"/><br/>
      * </summary>
      */
-    public class ProjectTask {
+    public class ProjectTask : IHasTaskData {
         #region Поле идентификатора
         /** Поле Id
          * <summary>

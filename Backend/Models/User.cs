@@ -1,4 +1,6 @@
-﻿namespace Backend.Models {
+﻿using Backend.Models.Interfaces;
+
+namespace Backend.Models {
     #region Перечисление UserRights
     /** Перечисление UserRights
      * <summary>
@@ -36,7 +38,7 @@
      *  Проекты участия <see cref="ParticipatingProjects"/><br/>
      * </summary>
      */
-    public class User {
+    public class User : IHasUserData {
         #region Данные авторизации и идентификатор
         /** Поле Id
          * <summary>

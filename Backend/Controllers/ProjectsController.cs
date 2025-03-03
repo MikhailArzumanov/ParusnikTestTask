@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Backend.Models;
 using Backend.Validation;
+using Backend.Models.Interfaces;
+using static Backend.Controllers.ProjectsController;
+using static Backend.Controllers.UsersController;
+using System.Net;
 
 namespace Backend.Controllers {
     #region Контроллер ProjectsController
@@ -94,9 +98,9 @@ namespace Backend.Controllers {
          * </returns>
          */
         private IActionResult? ExecEntryPipeline(
-            HttpRequest request        ,
-            UserRights  requiredRights ,
-            Project     entry
+            HttpRequest     request        ,
+            UserRights      requiredRights ,
+            IHasProjectData entry
         ) {
             var authErrorResp = TryAuth(Request, UserRights.USER);
             if(authErrorResp != null) {
@@ -118,18 +122,24 @@ namespace Backend.Controllers {
          * <returns>Возращает объект http-ответа</returns>
          */
         [HttpPost(Routes.Projects.CREATE_ENTRY)]
-        public IActionResult CreateEntry([FromBody] Project data) {
+        public IActionResult CreateEntry([FromBody] ProjectRequest data) {
             var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
             if(errorResponse != null) {
                 return errorResponse;
             }
 
             var timestamp = DateTime.UtcNow;
-            data.CreationDate         = timestamp;
-            data.LastModificationDate = timestamp;
-            db.Projects.Add(data);
+            var entry = new Project {
+                Name        = data.Name       ,
+                Description = data.Description,
+                CreationDate         = timestamp,
+                LastModificationDate = timestamp,
+            };
+            db.Projects.Add(entry);
             db.SaveChanges();
-            return Ok(data);
+
+            var response = new ProjectResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция GetList
@@ -146,9 +156,10 @@ namespace Backend.Controllers {
                 return authErrorResponse;
             }
 
-            var entries = db.Projects;
+            var entries = db.Projects.ToList();
 
-            return Ok(entries);
+            var response = new ProjectsResponse(entries);
+            return Ok(response);
         }
         #endregion
         #region Функция GetEntry
@@ -169,7 +180,9 @@ namespace Backend.Controllers {
             if(entry == null) {
                 return NotFound(RespMsgs.ID_NOT_FOUND);
             }
-            return Ok(entry);
+
+            var response = new ProjectResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RedactEntry
@@ -182,7 +195,10 @@ namespace Backend.Controllers {
          * <returns>Возращает объект http-ответа</returns>
          */
         [HttpPut(Routes.Projects.REDACT_ENTRY)]
-        public IActionResult RedactEntry([FromBody] Project data, [FromRoute] int projId) {
+        public IActionResult RedactEntry(
+            [FromBody ] ProjectRequest data  ,
+            [FromRoute] int            projId
+        ) {
             var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
             if(errorResponse != null) {
                 return errorResponse;
@@ -199,7 +215,9 @@ namespace Backend.Controllers {
 
             db.Projects.Update(entry);
             db.SaveChanges();
-            return Ok(entry);
+
+            var response = new ProjectResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RemoveEntry
@@ -224,7 +242,9 @@ namespace Backend.Controllers {
 
             db.Projects.Remove(entry);
             db.SaveChanges();
-            return Ok(entry);
+
+            var response = new ProjectResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция AddUser
@@ -260,8 +280,12 @@ namespace Backend.Controllers {
             project.Users.Add(user);
             db.Projects.Update(project);
             db.SaveChanges();
-            user.ParticipatingProjects = new List<Project>() { };
-            return Ok(user);
+
+            var response = new {
+                Project   = new ProjectResponse(project),
+                AddedUser = new UserResponse(user)
+            };
+            return Ok(response);
         }
         #endregion
         #region Функция RemoveUser
@@ -294,8 +318,12 @@ namespace Backend.Controllers {
             project.Users.Remove(user);
             db.Projects.Update(project);
             db.SaveChanges();
-            project.Users = new List<User>();
-            return Ok(project);
+
+            var response = new {
+                Project     = new ProjectResponse(project),
+                RemovedUser = new UserResponse(user)
+            };
+            return Ok(response);
         }
         #endregion
         #region Функция GetUsers
@@ -319,10 +347,53 @@ namespace Backend.Controllers {
             if(entry == null) {
                 return NotFound(RespMsgs.Projects.ID_NOT_FOUND);
             }
-            foreach(var user in entry.Users) {
-                user.ParticipatingProjects = new List<Project>();
+
+            var response = new {
+                Project = new ProjectResponse(entry)    ,
+                Users   = new UsersResponse(entry.Users),
+            };
+            return Ok(response);
+        }
+        #endregion
+        #region Структуры запросов
+        /** Класс ProjectRequest
+         * <summary>
+         *  Класс представляет структуру запроса с передачей данных проекта.
+         *  Описание полей см. в <see cref="Project"/>
+         * </summary>
+         */
+        public class ProjectRequest : IHasProjectData {
+            public string Name        { get; set; } = String.Empty;
+            public string Description { get; set; } = String.Empty;
+        }
+        #endregion
+        #region Структуры ответов
+        /** Класс ProjectResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом записи проекта.
+         *  Описание полей см. в <see cref="Project"/>
+         * </summary>
+         */
+        public class ProjectResponse {
+            public int    Id          { get; set; }
+            public string Title       { get; set; } = String.Empty;
+            public string Description { get; set; } = String.Empty;
+            public ProjectResponse(Project entry) {
+                Id          = entry.Id          ;
+                Title       = entry.Name        ;
+                Description = entry.Description ;
             }
-            return Ok(entry.Users);
+        }
+        /** Класс ProjectsResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом набора записей.
+         * </summary>
+         */
+        public class ProjectsResponse {
+            public ICollection<ProjectResponse> Entries { get; set; }
+            public ProjectsResponse(ICollection<Project> entries) {
+                Entries = entries.Select(x => new ProjectResponse(x)).ToList();
+            }
         }
         #endregion
     }

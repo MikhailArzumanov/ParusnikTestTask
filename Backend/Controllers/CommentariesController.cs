@@ -2,10 +2,13 @@
 using Backend.Constants;
 using Backend.Data;
 using Backend.Models;
+using Backend.Models.Interfaces;
 using Backend.Validation;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using static Backend.Constants.RespMsgs;
+using static Backend.Constants.Routes;
 
 namespace Backend.Controllers {
     #region Контроллер CommentariesController
@@ -94,9 +97,9 @@ namespace Backend.Controllers {
          * </returns>
          */
         private IActionResult? ExecEntryPipeline(
-            HttpRequest request        ,
-            UserRights  requiredRights ,
-            Commentary  entry
+            HttpRequest        request        ,
+            UserRights         requiredRights ,
+            IHasCommentaryData entry
         ) {
             var authErrorResp = TryAuth(Request, UserRights.USER);
             if (authErrorResp != null) {
@@ -156,7 +159,7 @@ namespace Backend.Controllers {
         }
         #endregion
         #region Функция CreateEntry
-        /** Функция CreateEntry(entry, int)
+        /** Функция CreateEntry(data, int)
          * <summary>
          *  Функция соответствует конечной точке создания записи.
          * </summary>
@@ -166,10 +169,10 @@ namespace Backend.Controllers {
          */
         [HttpPost(Routes.Commentaries.CREATE_ENTRY)]
         public IActionResult CreateEntry(
-            [FromBody]  Commentary entry , 
-            [FromRoute] int        taskId
+            [FromBody]  CommentaryRequest data  , 
+            [FromRoute] int               taskId
         ) {
-            var errorResponse = ExecEntryPipeline(Request, UserRights.USER, entry);
+            var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
             if(errorResponse != null) {
                 return errorResponse;
             }
@@ -180,20 +183,23 @@ namespace Backend.Controllers {
             }
 
             var timestamp = DateTime.UtcNow;
-            entry.CreationDate         = timestamp;
-            entry.LastModificationDate = timestamp;
-
-            entry.ProjectId     = task.ProjectId;
-            entry.ProjectTaskId = taskId        ;
+            var entry = new Commentary {
+                CommentText = data.CommentText,
+                CreationDate         = timestamp,
+                LastModificationDate = timestamp,
+                ProjectId     = task.ProjectId,
+                ProjectTaskId = taskId        ,      
+            };
 
             db.Commentaries.Add(entry);
             db.SaveChanges();
-            entry.ProjectTask = null;
-            return Ok(entry);
+
+            var response = new CommentaryResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RedactEntry
-        /** Функция RedactEntry(Commentary, int, int)
+        /** Функция RedactEntry(CommentaryRequest, int, int)
          * <summary>
          *  Функция соответствует конечной точке редактирования записи.
          * </summary>
@@ -204,9 +210,9 @@ namespace Backend.Controllers {
          */
         [HttpPut(Routes.Commentaries.REDACT_ENTRY)]
         public IActionResult RedactEntry(
-            [FromBody]  Commentary data        ,
-            [FromRoute] int        taskId      ,
-            [FromRoute] int        commentaryId
+            [FromBody]  CommentaryRequest data        ,
+            [FromRoute] int               taskId      ,
+            [FromRoute] int               commentaryId
         ) {
             var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
             if(errorResponse != null) {
@@ -228,8 +234,9 @@ namespace Backend.Controllers {
 
             db.Commentaries.Update(entry);
             db.SaveChanges();
-            entry.ProjectTask = null;
-            return Ok(entry);
+
+            var response = new CommentaryResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RemoveEntry
@@ -261,8 +268,9 @@ namespace Backend.Controllers {
 
             db.Commentaries.Remove(entry);
             db.SaveChanges();
-            entry.ProjectTask = null;
-            return Ok(entry);
+
+            var response = new CommentaryResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция GetList
@@ -295,11 +303,59 @@ namespace Backend.Controllers {
                 sortedEntries = entries.OrderByDescending(x => x.CommentText);
             }
 
-            var paginated = Page<Commentary>.FormPage(
-                sortedEntries.ToList(), pageNumber, pageSize
-            );
-            
-            return Ok(paginated);
+            var response = new CommentariesResponse(sortedEntries, pageNumber, pageSize);
+            return Ok(response);
+        }
+        #endregion
+        #region Структуры запросов
+        /** Класс CommentaryRequest
+         * <summary>
+         *  Класс представляет структуру запроса с передачей данных комментария.
+         *  Описание полей см. в <see cref="Commentary"/>
+         * </summary>
+         */
+        public class CommentaryRequest : IHasCommentaryData {
+            public string CommentText   { get; set; } = String.Empty;
+        }
+        #endregion
+        #region Структуры ответов
+        /** Класс CommentaryResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом записи комментария.
+         *  Описание полей см. в <see cref="Commentary"/>
+         * </summary>
+         */
+        public class CommentaryResponse {
+            public int    Id            { get; set; }
+            public string CommentText   { get; set; } = String.Empty;
+            public int    ProjectTaskId { get; set; }
+            public int    ProjectId     { get; set; }
+            public CommentaryResponse(Commentary entry) {
+                Id            = entry.Id            ;
+                CommentText   = entry.CommentText   ;
+                ProjectTaskId = entry.ProjectTaskId ;
+                ProjectId     = entry.ProjectId     ;
+            }
+        }
+        /** Класс CommentariesResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом набора записей.
+         * </summary>
+         */
+        public class CommentariesResponse {
+            public int PageNumber { get; set; }
+            public int PageSize   { get; set; }
+            public int PagesCount { get; set; }
+            public ICollection<CommentaryResponse> Entries { get; set; }
+            public CommentariesResponse(IQueryable<Commentary> entries, int pageNumber, int pageSize) {
+                PageNumber = pageNumber; PageSize = pageSize;
+                PagesCount = (int) Math.Ceiling(entries.Count()/1.0/PageSize);
+
+                var skipCount = PageSize*(PageNumber - 1);
+                this.Entries = entries
+                    .OrderBy(x => x.Id).Skip(skipCount).Take(PageSize)
+                    .Select(x => new CommentaryResponse(x)).ToList();
+            }
         }
         #endregion
     }

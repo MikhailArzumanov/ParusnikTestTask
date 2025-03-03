@@ -1,5 +1,6 @@
 ﻿using Backend.Constants;
 using Backend.Models;
+using Backend.Models.Interfaces;
 using System.Text.RegularExpressions;
 
 namespace Backend.Validation {
@@ -16,8 +17,8 @@ namespace Backend.Validation {
      * </summary>
      */
     public class Validator {
-        #region Функция Validate(Project)
-        /** Функция Validate(Project)
+        #region Функция Validate(IHasProjectData)
+        /** Функция Validate(IHasProjectData)
          * <summary>
          *  Функция осуществляет проверку валидности наименования и описания проекта.
          * </summary>
@@ -28,7 +29,7 @@ namespace Backend.Validation {
          *  Возвращает текст ошибки, либо пустую строку при её остутствии.
          * </returns>
          */
-        public static string Validate(Project subject) {
+        public static string Validate(IHasProjectData subject) {
             var nameRegexp = RegularExpressions.NAME_REGEXP;
             if (!nameRegexp.IsMatch(subject.Name)) {
                 return RespMsgs.Projects.NAME_IS_NONVALID;
@@ -40,8 +41,8 @@ namespace Backend.Validation {
             return String.Empty;
         }
         #endregion
-        #region Функция Validate(ProjectTask)
-        /** Функция Validate(ProjectTask)
+        #region Функция Validate(IHasTaskData)
+        /** Функция Validate(IHasTaskData)
          * <summary>
          *  Функция осуществляет проверку валидности наименования, описания и статуса задачи.
          * </summary>
@@ -52,7 +53,7 @@ namespace Backend.Validation {
          *  Возвращает текст ошибки, либо пустую строку при её остутствии.
          * </returns>
          */
-        public static string Validate(ProjectTask subject) {
+        public static string Validate(IHasTaskData subject) {
             var nameRegexp = RegularExpressions.NAME_REGEXP;
             if (!nameRegexp.IsMatch(subject.Name)) {
                 return RespMsgs.ProjectsTasks.NAME_IS_NONVALID;
@@ -67,8 +68,8 @@ namespace Backend.Validation {
             return String.Empty;
         }
         #endregion
-        #region Функция Validate(TasksStatus)
-        /** Функция Validate(TasksStatus)
+        #region Функция Validate(IHasStatusData)
+        /** Функция Validate(IHasStatusData)
          * <summary>
          *  Функция осуществляет проверку валидности наименования и описания статуса задачи.
          * </summary>
@@ -79,7 +80,7 @@ namespace Backend.Validation {
          *  Возвращает текст ошибки, либо пустую строку при её остутствии.
          * </returns>
          */
-        public static string Validate(TasksStatus subject) {
+        public static string Validate(IHasStatusData subject) {
             var nameRegexp = RegularExpressions.NAME_REGEXP;
             if (!nameRegexp.IsMatch(subject.Title)) {
                 return RespMsgs.TaskStatuses.TITLE_IS_NONVALID;
@@ -91,8 +92,8 @@ namespace Backend.Validation {
             return String.Empty;
         }
         #endregion
-        #region Функция Validate(Commentary)
-        /** Функция Validate(Commentary)
+        #region Функция Validate(IHasCommentaryData)
+        /** Функция Validate(IHasCommentaryData)
          * <summary>
          *  Функция осуществляет проверку валидности текста комментария.
          * </summary>
@@ -103,7 +104,7 @@ namespace Backend.Validation {
          *  Возвращает текст ошибки, либо пустую строку при её остутствии.
          * </returns>
          */
-        public static string Validate(Commentary subject) {
+        public static string Validate(IHasCommentaryData subject) {
             var textRegexp = RegularExpressions.TEXT_REGEXP;
             if (!textRegexp.IsMatch(subject.CommentText)) {
                 return RespMsgs.Commentaries.TEXT_IS_NONVALID;
@@ -111,8 +112,8 @@ namespace Backend.Validation {
             return String.Empty;
         }
         #endregion
-        #region Функция Validate(User)
-        /** Функция Validate(User)
+        #region Функция Validate(IHasUserData)
+        /** Функция Validate(IHasUserData)
          * <summary>
          *  Функция осуществляет проверку валидности<br/>
          *  фамилии, имени, адреса электронной почты,<br/>
@@ -125,7 +126,7 @@ namespace Backend.Validation {
          *  Возвращает текст ошибки, либо пустую строку при её остутствии.
          * </returns>
          */
-        public static string Validate(User subject) {
+        public static string Validate(IHasUserData subject) {
             var nameRegexp = RegularExpressions.NAME_REGEXP;
             if (!nameRegexp.IsMatch(subject.Name)) {
                 return RespMsgs.Users.NAME_IS_NONVALID;

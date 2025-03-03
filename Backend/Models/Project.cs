@@ -1,4 +1,6 @@
-﻿namespace Backend.Models {
+﻿using Backend.Models.Interfaces;
+
+namespace Backend.Models {
     #region Класс Project
     /** Класс Project
      * <summary>
@@ -19,7 +21,7 @@
      *  Пользователи-участия <see cref="Users"/><br/>
      * </summary>
      */
-    public class Project {
+    public class Project : IHasProjectData {
         #region Поле идентификатора
         /** Поле Id
          * <summary>

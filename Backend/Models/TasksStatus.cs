@@ -1,4 +1,6 @@
-﻿namespace Backend.Models {
+﻿using Backend.Models.Interfaces;
+
+namespace Backend.Models {
     #region Класс TasksStatus
     /** Класс TasksStatus
      * <summary>
@@ -11,7 +13,7 @@
      *  Дата модификации <see cref="LastModificationDate"/><br/>
      * </summary>
      */
-    public class TasksStatus {
+    public class TasksStatus : IHasStatusData {
         #region Поле идентификатора
         /** Поле Id
          * <summary>

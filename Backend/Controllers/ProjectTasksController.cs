@@ -2,11 +2,14 @@
 using Backend.Constants;
 using Backend.Data;
 using Backend.Models;
+using Backend.Models.Interfaces;
 using Backend.Validation;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using static Backend.Constants.Routes;
+using System.Xml.Linq;
 
 namespace Backend.Controllers {
     #region Контроллер ProjectTasksController
@@ -95,15 +98,15 @@ namespace Backend.Controllers {
          * </returns>
          */
         private IActionResult? ExecEntryPipeline(
-            HttpRequest request        ,
-            UserRights  requiredRights ,
-            ProjectTask entry
+            HttpRequest  request        ,
+            UserRights   requiredRights ,
+            IHasTaskData data
         ) {
             var authErrorResp = TryAuth(Request, UserRights.USER);
             if(authErrorResp != null) {
                 return authErrorResp;
             }
-            var validationMsg = Validator.Validate(entry);
+            var validationMsg = Validator.Validate(data);
             if(validationMsg != String.Empty) {
                 return BadRequest(validationMsg);
             }
@@ -160,7 +163,7 @@ namespace Backend.Controllers {
         }
         #endregion
         #region Функция CreateEntry
-        /** Функция CreateEntry(ProjectTask, int)
+        /** Функция CreateEntry(TaskRequest, int)
          * <summary>
          *  Функция соответствует конечной точке создания записи.
          * </summary>
@@ -170,7 +173,7 @@ namespace Backend.Controllers {
          */
         [HttpPost(Routes.ProjectTasks.CREATE_ENTRY)]
         public IActionResult CreateEntry(
-            [FromBody]  ProjectTask data  , 
+            [FromBody]  TaskRequest data  , 
             [FromRoute] int         projId
         ) {
             var errorResponse = ExecEntryPipeline(Request, UserRights.USER, data);
@@ -178,25 +181,29 @@ namespace Backend.Controllers {
                 return errorResponse;
             }
 
-            var project = db.Projects
-                .Include(x => x.Tasks)
-                .FirstOrDefault(x => x.Id == projId);
+            var project = db.Projects.FirstOrDefault(x => x.Id == projId);
             if (project == null) {
                 return NotFound(RespMsgs.Projects.ID_NOT_FOUND);
             }
 
             var timestamp = DateTime.UtcNow;
-            data.CreationDate         = timestamp ;
-            data.LastModificationDate = timestamp ;
-            data.ProjectId            = projId    ;
-            db.Tasks.Add(data);
+            var entry = new ProjectTask {
+                Name        = data.Name        ,
+                Description = data.Description ,
+                StatusId    = data.StatusId    ,
+                CreationDate         = timestamp,
+                LastModificationDate = timestamp,
+                ProjectId = projId
+            };
+            db.Tasks.Add(entry);
             db.SaveChanges();
-            data.Project = null;
-            return Ok(data);
+
+            var response = new TaskResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RedactEntry
-        /** Функция RedactEntry(ProjectTask, int, int)
+        /** Функция RedactEntry(TaskRequest, int, int)
          * <summary>
          *  Функция соответствует конечной точке редактирования записи.
          * </summary>
@@ -207,7 +214,7 @@ namespace Backend.Controllers {
          */
         [HttpPut(Routes.ProjectTasks.REDACT_ENTRY)]
         public IActionResult RedactEntry(
-            [FromBody]  ProjectTask data   ,
+            [FromBody ] TaskRequest data   ,
             [FromRoute] int         projId ,
             [FromRoute] int         taskId 
         ) {
@@ -232,8 +239,9 @@ namespace Backend.Controllers {
 
             db.Tasks.Update(entry);
             db.SaveChanges();
-            entry.Project = null;
-            return Ok(entry);
+
+            var response = new TaskResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция RemoveEntry
@@ -266,8 +274,9 @@ namespace Backend.Controllers {
 
             db.Tasks.Remove(entry);
             db.SaveChanges();
-            entry.Project = null;
-            return Ok(entry);
+
+            var response = new TaskResponse(entry);
+            return Ok(response);
         }
         #endregion
         #region Функция GetList
@@ -287,8 +296,8 @@ namespace Backend.Controllers {
         [HttpGet(Routes.ProjectTasks.GET_LIST)]
         public IActionResult GetList(
             [FromRoute] int projId,
-            [FromQuery] int pageNumber = 1,
-            [FromQuery] int pageSize = 20,
+            [FromQuery] int pageNumber =  1,
+            [FromQuery] int pageSize   = 20,
             [FromQuery] string taskNameFilter = "",
             [FromQuery] string taskNameSortionDirection = Sortion.ASC_KEY
         ) {
@@ -308,11 +317,8 @@ namespace Backend.Controllers {
                 sortedEntries = entries.OrderByDescending(x => x.Name);
             }
 
-            var paginated = Page<ProjectTask>.FormPage(
-                sortedEntries.ToList(), pageNumber, pageSize
-            );
-
-            return Ok(paginated);
+            var response = new TasksResponse(sortedEntries, pageNumber, pageSize);
+            return Ok(response);
         }
         #endregion
         #region Функция GetByStatus
@@ -355,11 +361,63 @@ namespace Backend.Controllers {
                 sortedEntries = entries.OrderByDescending(x => x.Name);
             }
 
-            var paginated = Page<ProjectTask>.FormPage(
-                sortedEntries.ToList(), pageNumber, pageSize
-            );
+            var response = new TasksResponse(sortedEntries, pageNumber, pageSize);
+            return Ok(response);
+        }
+        #endregion
+        #region Структуры запросов
+        /** Класс TaskRequest
+         * <summary>
+         *  Класс представляет структуру запроса с передачей данных задачи.
+         *  Описание полей см. в <see cref="ProjectTask"/>
+         * </summary>
+         */
+        public class TaskRequest : IHasTaskData {
+            public string Name        { get; set; } = String.Empty;
+            public string Description { get; set; } = String.Empty;
+            public int    StatusId    { get; set; }
+        }
+        #endregion
+        #region Структуры ответов
+        /** Класс TaskResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом записи задачи.
+         *  Описание полей см. в <see cref="ProjectTask"/>
+         * </summary>
+         */
+        public class TaskResponse {
+            public int    Id          { get; set; }
+            public string Name        { get; set; } = String.Empty;
+            public string Description { get; set; } = String.Empty;
+            public int    StatusId    { get; set; }
+            public int    ProjectId   { get; set; }
+            public TaskResponse(ProjectTask entry) {
+                Id          = entry.Id          ;
+                Name        = entry.Name        ;
+                Description = entry.Description ;
+                StatusId    = entry.StatusId    ;
+                ProjectId   = entry.ProjectId   ;
+            }
+        }
+        /** Класс TasksResponse
+         * <summary>
+         *  Класс представляет структуру ответа при запросе с возвратом набора записей.
+         * </summary>
+         */
+        public class TasksResponse {
+            public int PageNumber { get; set; }
+            public int PageSize   { get; set; }
+            public int PagesCount { get; set; }
+            public ICollection<TaskResponse> Entries { get; set; }
+            public TasksResponse(IQueryable<ProjectTask> entries, int pageNumber, int pageSize) {
+                PageNumber = pageNumber; PageSize = pageSize;
+                PagesCount = (int) Math.Ceiling(entries.Count()/1.0/PageSize);
 
-            return Ok(entries);
+                var skipCount = PageSize*(PageNumber - 1);
+                this.Entries = entries
+                    .OrderBy(x => x.Id).Skip(skipCount).Take(PageSize)
+                    .Select(x => new TaskResponse(x)).ToList();
+            }
         }
         #endregion
     }
